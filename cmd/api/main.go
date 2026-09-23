@@ -5,17 +5,28 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
 	slog.Info("booting archie api...")
 
-	mux := http.NewServeMux()
+	if err := godotenv.Load(); err != nil {
+		slog.Debug("no .env file loaded", "error", err)
+	}
 
-	slog.Info("starting server on port :4000")
+	mux := http.NewServeMux()
+	port := os.Getenv("PORT")
+
+	if port == "" {
+		port = "4000"
+	}
+
+	slog.Info("starting server on", "port", port)
 
 	srv := &http.Server{
-		Addr:         ":4000",
+		Addr:         ":" + port,
 		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
