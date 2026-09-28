@@ -10,12 +10,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
-	"github.com/jtzuccarelli/archie/internal/call"
+	"github.com/jtzuccarelli/archie/internal/store"
 )
 
 type application struct {
 	logger *slog.Logger
-	store  *call.Store
+	store  *store.Store
 }
 
 func main() {
@@ -52,7 +52,7 @@ func run(logger *slog.Logger) error {
 
 	app := &application{
 		logger: logger,
-		store:  call.NewStore(pool),
+		store:  store.NewStore(pool),
 	}
 
 	srv := &http.Server{
