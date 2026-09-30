@@ -13,7 +13,8 @@ const (
 
 type Call struct {
 	ID                  int64
-	Filename            string
+	TdCallID            *string
+	AudioFileURL        string
 	Transcript          *string
 	Flags               []string
 	FlagCount           int
@@ -24,8 +25,8 @@ type Call struct {
 	AgentName           *string
 	Disposition         string
 	OfferName           string
-	AgentTalkTime       int
-	ForwardDuration     int
+	AgentTalkTime       *int
+	ForwardDuration     *int
 	Status              Status
 	Attempts            int
 	ProcessingStartedAt *time.Time

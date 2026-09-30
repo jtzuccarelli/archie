@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE calls (
     id                    integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     filename              text NOT NULL,
