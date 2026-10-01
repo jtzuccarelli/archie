@@ -31,7 +31,8 @@ func (p *Processor) Process(ctx context.Context, c call.Call) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("download: %w", err)
 	}
-	defer audio.Close()
+
+	_ = audio
 
 	return Result{}, nil
 }
