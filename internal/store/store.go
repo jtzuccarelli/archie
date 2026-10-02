@@ -59,3 +59,50 @@ func (s *Store) CreateCall(ctx context.Context, c call.Call) (int64, error) {
 
 	return id, nil
 }
+
+func (s *Store) ClaimCalls(ctx context.Context, limit int) ([]call.Call, error) {
+	const query = `
+		UPDATE calls
+		   SET status = 'processing',
+		       processing_started_at = now(),
+		       attempts = attempts + 1
+		 WHERE id IN (
+			SELECT id
+			  FROM calls
+			 WHERE status = 'pending'
+			   AND attempts < 3
+			   AND next_attempt_at <= now()
+			 ORDER BY next_attempt_at
+			 LIMIT $1
+			   FOR UPDATE SKIP LOCKED
+		 )
+		RETURNING id, td_call_id, audio_file_url, status, attempts, processing_started_at`
+
+	rows, err := s.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("claiming calls: %w", err)
+	}
+	defer rows.Close()
+
+	var calls []call.Call
+	for rows.Next() {
+		var c call.Call
+		if err := rows.Scan(
+			&c.ID,
+			&c.TdCallID,
+			&c.AudioFileURL,
+			&c.Status,
+			&c.Attempts,
+			&c.ProcessingStartedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning claimed call: %w", err)
+		}
+		calls = append(calls, c)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating claimed calls: %w", err)
+	}
+
+	return calls, nil
+}

@@ -10,9 +10,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/jtzuccarelli/archie/internal/analyzer"
 	"github.com/jtzuccarelli/archie/internal/processor"
 	"github.com/jtzuccarelli/archie/internal/store"
 	"github.com/jtzuccarelli/archie/internal/trackdrive"
+	"github.com/jtzuccarelli/archie/internal/transcriber"
 	"github.com/jtzuccarelli/archie/internal/worker"
 )
 
@@ -53,7 +55,9 @@ func run(logger *slog.Logger) error {
 	st := store.NewStore(pool)
 	c := http.Client{Timeout: 60 * time.Second}
 	td := trackdrive.New(cfg.tdAuthHeader, &c)
-	proc := processor.New(td)
+	tr := transcriber.New(cfg.openaiApiKey, &c)
+	an := analyzer.New(cfg.openaiApiKey, &c)
+	proc := processor.New(td, tr, an)
 
 	w := worker.New(logger, st, proc)
 
