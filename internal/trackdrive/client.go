@@ -34,11 +34,11 @@ func (client *Client) Download(ctx context.Context, url string) ([]byte, error) 
 		return nil, fmt.Errorf("downloading audio: %w", err)
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("TrackDrive returned HTTP status %d", resp.StatusCode)
 	}
-
-	defer resp.Body.Close()
 
 	audio, err := io.ReadAll(io.LimitReader(resp.Body, maxAudioBytes+1))
 	if err != nil {
