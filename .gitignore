@@ -24,5 +24,6 @@ go.work.sum
 .vscode/
 .DS_Store
 
-# CLAUDE
+# MD files
 CLAUDE.md
+AGENTS.md

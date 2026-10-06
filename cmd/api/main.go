@@ -14,8 +14,9 @@ import (
 )
 
 type application struct {
-	logger *slog.Logger
-	store  *store.Store
+	logger   *slog.Logger
+	store    *store.Store
+	qvSecret []byte
 }
 
 func main() {
@@ -51,8 +52,9 @@ func run(logger *slog.Logger) error {
 	}
 
 	app := &application{
-		logger: logger,
-		store:  store.NewStore(pool),
+		logger:   logger,
+		store:    store.NewStore(pool),
+		qvSecret: []byte(cfg.qvSecret),
 	}
 
 	srv := &http.Server{
