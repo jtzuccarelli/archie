@@ -10,7 +10,10 @@ import (
 	"github.com/jtzuccarelli/archie/internal/call"
 )
 
-var ErrDuplicateCall = errors.New("call already exists")
+var (
+	ErrDuplicateCall = errors.New("call already exists")
+	ErrStaleClaim    = errors.New("claim is stale")
+)
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -105,4 +108,32 @@ func (s *Store) ClaimCalls(ctx context.Context, limit int) ([]call.Call, error) 
 	}
 
 	return calls, nil
+}
+
+func (s *Store) CompleteCall(ctx context.Context, id int64, attempts int, o call.Outcome) error {
+
+	const query = `
+		UPDATE calls
+		   SET status = 'complete',
+		       transcript = $1,
+		       flags = $2,
+		       flag_count = jsonb_array_length($2),
+		       is_pushy = $3,
+		       score = $4,
+		       last_error = NULL
+		 WHERE id = $5
+		   AND attempts = $6
+		   AND status = 'processing'`
+
+	tag, err := s.pool.Exec(ctx, query, o.Transcript, o.Flags, o.IsPushy, o.Score, id, attempts)
+
+	if err != nil {
+		return fmt.Errorf("completing call %d: %w", id, err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("completing call %d: %w", id, ErrStaleClaim)
+	}
+
+	return nil
 }

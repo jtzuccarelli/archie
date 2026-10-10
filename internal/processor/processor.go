@@ -16,14 +16,6 @@ type Processor struct {
 	analyzer    *analyzer.Client
 }
 
-type Result struct {
-	Transcript string
-	Flags      []string
-	FlagCount  int
-	IsPushy    bool
-	Score      int
-}
-
 func New(td *trackdrive.Client, tr *transcriber.Client, an *analyzer.Client) *Processor {
 	return &Processor{
 		trackdrive:  td,
@@ -32,26 +24,30 @@ func New(td *trackdrive.Client, tr *transcriber.Client, an *analyzer.Client) *Pr
 	}
 }
 
-func (p *Processor) Process(ctx context.Context, c call.Call) (Result, error) {
+func (p *Processor) Process(ctx context.Context, c call.Call) (call.Outcome, error) {
 	audio, err := p.trackdrive.Download(ctx, c.AudioFileURL)
 	if err != nil {
-		return Result{}, fmt.Errorf("download: %w", err)
+		return call.Outcome{}, fmt.Errorf("download: %w", err)
 	}
 
 	transcript, err := p.transcriber.Transcribe(ctx, audio)
 	if err != nil {
-		return Result{}, fmt.Errorf("transcribe: %w", err)
+		return call.Outcome{}, fmt.Errorf("transcribe: %w", err)
 	}
 
 	analysis, err := p.analyzer.Analyze(ctx, transcript)
 	if err != nil {
-		return Result{}, fmt.Errorf("analyze: %w", err)
+		return call.Outcome{}, fmt.Errorf("analyze: %w", err)
 	}
 
-	return Result{
+	flags := analysis.Flags
+	if flags == nil {
+		flags = []string{}
+	}
+
+	return call.Outcome{
 		Transcript: transcript,
-		Flags:      analysis.Flags,
-		FlagCount:  len(analysis.Flags),
+		Flags:      flags,
 		IsPushy:    analysis.IsPushy,
 		Score:      analysis.Score,
 	}, nil

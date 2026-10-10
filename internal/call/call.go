@@ -33,3 +33,10 @@ type Call struct {
 	LastError           *string
 	NextAttemptAt       time.Time
 }
+
+type Outcome struct {
+	Transcript string
+	Flags      []string
+	IsPushy    bool
+	Score      int
+}
