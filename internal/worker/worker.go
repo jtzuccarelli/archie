@@ -27,15 +27,15 @@ func (w *Worker) Run(ctx context.Context) error {
 
 	c, err := w.store.ClaimCalls(ctx, 1)
 
+	if err != nil {
+		return err
+	}
+
 	if len(c) == 0 {
 		return nil
 	}
 
 	claimed := c[0]
-
-	if err != nil {
-		return err
-	}
 
 	outcome, err := w.processor.Process(ctx, claimed)
 
