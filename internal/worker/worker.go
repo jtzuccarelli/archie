@@ -25,14 +25,32 @@ func New(logger *slog.Logger, store *store.Store, processor *processor.Processor
 }
 
 func (w *Worker) Run(ctx context.Context) error {
+
 	for {
+
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		found, err := w.processNext(ctx)
+
 		if err != nil {
 			return err
 		}
 
-		if !found {
-			time.Sleep(5 * time.Second)
+		if found {
+			continue
+		}
+
+		timer := time.NewTimer(5 * time.Second)
+
+		select {
+
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+			// wait here before querying again so we don't hammer db
 		}
 	}
 }
