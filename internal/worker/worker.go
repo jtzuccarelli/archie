@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jtzuccarelli/archie/internal/processor"
 	"github.com/jtzuccarelli/archie/internal/store"
@@ -24,28 +25,40 @@ func New(logger *slog.Logger, store *store.Store, processor *processor.Processor
 }
 
 func (w *Worker) Run(ctx context.Context) error {
+	for {
+		found, err := w.processNext(ctx)
+		if err != nil {
+			return err
+		}
 
+		if !found {
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+func (w *Worker) processNext(ctx context.Context) (bool, error) {
 	c, err := w.store.ClaimCalls(ctx, 1)
 
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if len(c) == 0 {
-		return nil
+		return false, nil
 	}
 
 	claimed := c[0]
+	w.logger.Info("call claimed", "call_id", claimed.ID, "attempts", claimed.Attempts)
 
 	outcome, err := w.processor.Process(ctx, claimed)
-
 	if err != nil {
-		return fmt.Errorf("processing call %d: %w", claimed.ID, err)
+		return true, fmt.Errorf("processing call %d: %w", claimed.ID, err)
 	}
 
-	if err = w.store.CompleteCall(ctx, claimed.ID, claimed.Attempts, outcome); err != nil {
-		return err
+	if err := w.store.CompleteCall(ctx, claimed.ID, claimed.Attempts, outcome); err != nil {
+		return true, err
 	}
 
-	return nil
+	return true, nil
 }
