@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -133,6 +134,75 @@ func (s *Store) CompleteCall(ctx context.Context, id int64, attempts int, o call
 
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("completing call %d: %w", id, ErrStaleClaim)
+	}
+
+	return nil
+}
+
+func (s *Store) FailCall(ctx context.Context, id int64, attempts int, errCause error) error {
+
+	const query = `
+		UPDATE calls
+		   SET status = 'failed',
+		       last_error = $3
+		 WHERE id = $1
+		   AND attempts = $2
+		   AND status = 'processing'`
+
+	message := "unknown processing error"
+	if errCause != nil {
+		message = errCause.Error()
+	}
+
+	tag, err := s.pool.Exec(ctx, query, id, attempts, message)
+
+	if err != nil {
+		return fmt.Errorf("failing call %d: %w", id, err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("failing call %d: %w", id, ErrStaleClaim)
+	}
+
+	return nil
+}
+
+func (s *Store) RetryCall(ctx context.Context, id int64, attempts int, errCause error) error {
+
+	const query = `
+		UPDATE calls
+		   SET status = 'pending',
+		       last_error = $3,
+			   next_attempt_at = $4
+		 WHERE id = $1
+		   AND attempts = $2
+		   AND status = 'processing'`
+
+	message := "unknown processing error"
+	if errCause != nil {
+		message = errCause.Error()
+	}
+
+	delays := []time.Duration{
+		5 * time.Minute,
+		15 * time.Minute,
+		25 * time.Minute,
+	}
+
+	if attempts < 1 || attempts > len(delays) {
+		return fmt.Errorf("invalid attempt count: %d", attempts)
+	}
+
+	nextAttemptAt := time.Now().Add(delays[attempts-1])
+
+	tag, err := s.pool.Exec(ctx, query, id, attempts, message, nextAttemptAt)
+
+	if err != nil {
+		return fmt.Errorf("retrying call %d: %w", id, err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("retrying call %d: %w", id, ErrStaleClaim)
 	}
 
 	return nil

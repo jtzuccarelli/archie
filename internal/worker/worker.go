@@ -2,11 +2,13 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/jtzuccarelli/archie/internal/processor"
+	"github.com/jtzuccarelli/archie/internal/retry"
 	"github.com/jtzuccarelli/archie/internal/store"
 )
 
@@ -70,12 +72,48 @@ func (w *Worker) processNext(ctx context.Context) (bool, error) {
 	w.logger.Info("call claimed", "call_id", claimed.ID, "attempts", claimed.Attempts)
 
 	outcome, err := w.processor.Process(ctx, claimed)
+	maxAttemptsReached := claimed.Attempts >= 3
+
+	if ctx.Err() != nil {
+		return true, ctx.Err()
+	}
+
 	if err != nil {
-		return true, fmt.Errorf("processing call %d: %w", claimed.ID, err)
+
+		if !retry.IsRetryable(err) || maxAttemptsReached {
+			e := w.store.FailCall(ctx, claimed.ID, claimed.Attempts, err)
+
+			if errors.Is(e, store.ErrStaleClaim) {
+				return true, nil
+			}
+
+			if e != nil {
+				return true, fmt.Errorf("processing call %d: %w", claimed.ID, e)
+			}
+
+			return true, nil
+		} else {
+			e := w.store.RetryCall(ctx, claimed.ID, claimed.Attempts, err)
+
+			if errors.Is(e, store.ErrStaleClaim) {
+				return true, nil
+			}
+
+			if e != nil {
+				return true, fmt.Errorf("processing call %d: %w", claimed.ID, e)
+			}
+
+			return true, nil
+
+		}
 	}
 
 	if err := w.store.CompleteCall(ctx, claimed.ID, claimed.Attempts, outcome); err != nil {
-		return true, err
+		if errors.Is(err, store.ErrStaleClaim) {
+			return true, nil
+		}
+
+		return true, fmt.Errorf("completing call %d: %w", claimed.ID, err)
 	}
 
 	return true, nil
