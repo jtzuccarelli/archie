@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,6 +18,8 @@ import (
 	"github.com/jtzuccarelli/archie/internal/transcriber"
 	"github.com/jtzuccarelli/archie/internal/worker"
 )
+
+const workerCount = 5
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -61,6 +64,15 @@ func run(logger *slog.Logger) error {
 
 	w := worker.New(logger, st, proc)
 
-	return w.Run(ctx)
+	var wg sync.WaitGroup
+	for i := range workerCount {
+		wg.Go(func() {
+			if err := w.Run(ctx); err != nil {
+				logger.Error("worker run failed", "worker", i, "error", err)
+			}
+		})
+	}
+	wg.Wait()
 
+	return nil
 }

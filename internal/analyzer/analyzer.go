@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/jtzuccarelli/archie/internal/retry"
 )
 
 const (
@@ -92,12 +94,12 @@ func (c *Client) Analyze(ctx context.Context, transcript string) (Analysis, erro
 
 	b, err := json.Marshal(payload)
 	if err != nil {
-		return Analysis{}, fmt.Errorf("encoding analysis request: %w", err)
+		return Analysis{}, retry.Permanent(fmt.Errorf("encoding analysis request: %w", err))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(b))
 	if err != nil {
-		return Analysis{}, fmt.Errorf("building analysis request: %w", err)
+		return Analysis{}, retry.Permanent(fmt.Errorf("building analysis request: %w", err))
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
@@ -105,32 +107,32 @@ func (c *Client) Analyze(ctx context.Context, transcript string) (Analysis, erro
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return Analysis{}, fmt.Errorf("sending analysis request: %w", err)
+		return Analysis{}, retry.Retryable(fmt.Errorf("sending analysis request: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return Analysis{}, fmt.Errorf("openai returned status %d: %s", resp.StatusCode, msg)
+		return Analysis{}, fmt.Errorf("openai analysis: %w", retry.FromStatus(resp.StatusCode, msg))
 	}
 
 	var out responsesResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return Analysis{}, fmt.Errorf("decoding analysis response: %w", err)
+		return Analysis{}, retry.Permanent(fmt.Errorf("decoding analysis response: %w", err))
 	}
 
 	if out.Status != "completed" {
-		return Analysis{}, fmt.Errorf("analysis response status %q", out.Status)
+		return Analysis{}, retry.Permanent(fmt.Errorf("analysis response status %q", out.Status))
 	}
 
 	text, err := outputText(out)
 	if err != nil {
-		return Analysis{}, err
+		return Analysis{}, retry.Permanent(err)
 	}
 
 	var analysis Analysis
 	if err := json.Unmarshal([]byte(text), &analysis); err != nil {
-		return Analysis{}, fmt.Errorf("decoding analysis output: %w", err)
+		return Analysis{}, retry.Permanent(fmt.Errorf("decoding analysis output: %w", err))
 	}
 
 	return analysis, nil

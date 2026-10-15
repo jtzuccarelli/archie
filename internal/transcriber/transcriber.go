@@ -8,6 +8,8 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+
+	"github.com/jtzuccarelli/archie/internal/retry"
 )
 
 const (
@@ -36,25 +38,25 @@ func (c *Client) Transcribe(ctx context.Context, audio []byte) (string, error) {
 	mw := multipart.NewWriter(&body)
 
 	if err := mw.WriteField("model", model); err != nil {
-		return "", fmt.Errorf("writing model field: %w", err)
+		return "", retry.Permanent(fmt.Errorf("writing model field: %w", err))
 	}
 
 	part, err := mw.CreateFormFile("file", "recording.mp3")
 	if err != nil {
-		return "", fmt.Errorf("creating file field: %w", err)
+		return "", retry.Permanent(fmt.Errorf("creating file field: %w", err))
 	}
 
 	if _, err := part.Write(audio); err != nil {
-		return "", fmt.Errorf("writing audio: %w", err)
+		return "", retry.Permanent(fmt.Errorf("writing audio: %w", err))
 	}
 
 	if err := mw.Close(); err != nil {
-		return "", fmt.Errorf("closing multipart body: %w", err)
+		return "", retry.Permanent(fmt.Errorf("closing multipart body: %w", err))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &body)
 	if err != nil {
-		return "", fmt.Errorf("building transcription request: %w", err)
+		return "", retry.Permanent(fmt.Errorf("building transcription request: %w", err))
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
@@ -62,18 +64,18 @@ func (c *Client) Transcribe(ctx context.Context, audio []byte) (string, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("sending transcription request: %w", err)
+		return "", retry.Retryable(fmt.Errorf("sending transcription request: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("openai returned status %d: %s", resp.StatusCode, msg)
+		return "", fmt.Errorf("openai transcription: %w", retry.FromStatus(resp.StatusCode, msg))
 	}
 
 	var out transcriptionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", fmt.Errorf("decoding transcription response: %w", err)
+		return "", retry.Permanent(fmt.Errorf("decoding transcription response: %w", err))
 	}
 
 	return out.Text, nil
