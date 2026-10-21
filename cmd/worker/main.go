@@ -19,7 +19,10 @@ import (
 	"github.com/jtzuccarelli/archie/internal/worker"
 )
 
-const workerCount = 5
+const (
+	workerCount   = 5
+	sweepInterval = 5 * time.Minute
+)
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -72,6 +75,14 @@ func run(logger *slog.Logger) error {
 			}
 		})
 	}
+
+	sw := worker.NewSweeper(logger, st, sweepInterval)
+	wg.Go(func() {
+		if err := sw.Run(ctx); err != nil {
+			logger.Error("sweeper run failed", "error", err)
+		}
+	})
+
 	wg.Wait()
 
 	return nil
