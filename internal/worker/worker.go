@@ -69,7 +69,7 @@ func (w *Worker) processNext(ctx context.Context) (bool, error) {
 	}
 
 	claimed := c[0]
-	w.logger.Info("call claimed", "call_id", claimed.ID, "attempts", claimed.Attempts)
+	w.logger.InfoContext(ctx, "call claimed", "call_id", claimed.ID, "attempts", claimed.Attempts)
 
 	outcome, err := w.processor.Process(ctx, claimed)
 	maxAttemptsReached := claimed.Attempts >= 3
@@ -91,6 +91,12 @@ func (w *Worker) processNext(ctx context.Context) (bool, error) {
 				return true, fmt.Errorf("processing call %d: %w", claimed.ID, e)
 			}
 
+			w.logger.ErrorContext(ctx, "call failed",
+				"call_id", claimed.ID,
+				"attempts", claimed.Attempts,
+				"error", err,
+			)
+
 			return true, nil
 		} else {
 			e := w.store.RetryCall(ctx, claimed.ID, claimed.Attempts, err)
@@ -102,6 +108,12 @@ func (w *Worker) processNext(ctx context.Context) (bool, error) {
 			if e != nil {
 				return true, fmt.Errorf("processing call %d: %w", claimed.ID, e)
 			}
+
+			w.logger.WarnContext(ctx, "call retry scheduled",
+				"call_id", claimed.ID,
+				"attempts", claimed.Attempts,
+				"error", err,
+			)
 
 			return true, nil
 
@@ -115,6 +127,8 @@ func (w *Worker) processNext(ctx context.Context) (bool, error) {
 
 		return true, fmt.Errorf("completing call %d: %w", claimed.ID, err)
 	}
+
+	w.logger.InfoContext(ctx, "call completed", "call_id", claimed.ID, "attempts", claimed.Attempts)
 
 	return true, nil
 }

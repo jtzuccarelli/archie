@@ -66,6 +66,7 @@ func run(logger *slog.Logger) error {
 	proc := processor.New(td, tr, an)
 
 	w := worker.New(logger, st, proc)
+	logger.Info("starting worker...")
 
 	var wg sync.WaitGroup
 	for i := range workerCount {
@@ -77,6 +78,8 @@ func run(logger *slog.Logger) error {
 	}
 
 	sw := worker.NewSweeper(logger, st, sweepInterval)
+	logger.Info("starting sweeper...")
+
 	wg.Go(func() {
 		if err := sw.Run(ctx); err != nil {
 			logger.Error("sweeper run failed", "error", err)
