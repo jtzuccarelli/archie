@@ -11,6 +11,14 @@ import (
 	"github.com/jtzuccarelli/archie/internal/call"
 )
 
+var retryDelays = []time.Duration{
+	5 * time.Minute,
+	15 * time.Minute,
+	25 * time.Minute,
+}
+
+const staleAfter = 5 * time.Minute
+
 var (
 	ErrDuplicateCall = errors.New("call already exists")
 	ErrStaleClaim    = errors.New("claim is stale")
@@ -183,17 +191,11 @@ func (s *Store) RetryCall(ctx context.Context, id int64, attempts int, errCause 
 		message = errCause.Error()
 	}
 
-	delays := []time.Duration{
-		5 * time.Minute,
-		15 * time.Minute,
-		25 * time.Minute,
-	}
-
-	if attempts < 1 || attempts > len(delays) {
+	if attempts < 1 || attempts > len(retryDelays) {
 		return fmt.Errorf("invalid attempt count: %d", attempts)
 	}
 
-	nextAttemptAt := time.Now().Add(delays[attempts-1])
+	nextAttemptAt := time.Now().Add(retryDelays[attempts-1])
 
 	tag, err := s.pool.Exec(ctx, query, id, attempts, message, nextAttemptAt)
 
@@ -206,4 +208,49 @@ func (s *Store) RetryCall(ctx context.Context, id int64, attempts int, errCause 
 	}
 
 	return nil
+}
+
+func (s *Store) RecoverStaleCalls(ctx context.Context) (retried, failed int64, err error) {
+
+	const query = `
+		UPDATE calls
+		   SET status = CASE WHEN attempts < 3 THEN 'pending' ELSE 'failed' END,
+		       next_attempt_at = CASE
+		           WHEN attempts < 3
+		           THEN now() + ($2::bigint[])[GREATEST(attempts, 1)] * interval '1 second'
+		           ELSE next_attempt_at
+		       END,
+		       last_error = 'processing lease expired'
+		 WHERE status = 'processing'
+		   AND processing_started_at < now() - $1::bigint * interval '1 second'
+		RETURNING status`
+
+	delaySecs := make([]int64, len(retryDelays))
+	for i, d := range retryDelays {
+		delaySecs[i] = int64(d.Seconds())
+	}
+
+	rows, err := s.pool.Query(ctx, query, int64(staleAfter.Seconds()), delaySecs)
+	if err != nil {
+		return 0, 0, fmt.Errorf("recovering stale calls: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var status call.Status
+		if err := rows.Scan(&status); err != nil {
+			return 0, 0, fmt.Errorf("scanning recovered call: %w", err)
+		}
+		if status == call.StatusFailed {
+			failed++
+		} else {
+			retried++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return 0, 0, fmt.Errorf("iterating recovered calls: %w", err)
+	}
+
+	return retried, failed, nil
 }
