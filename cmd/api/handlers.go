@@ -74,17 +74,17 @@ func (app *application) createCallsHandler(w http.ResponseWriter, r *http.Reques
 
 	id, err := app.store.CreateCall(r.Context(), c)
 	if errors.Is(err, store.ErrDuplicateCall) {
-		app.logger.Info("duplicate call ignored", "td_call_id", tdCallID)
+		app.logger.DebugContext(r.Context(), "duplicate call ignored", "td_call_id", tdCallID)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 	if err != nil {
-		app.logger.Error("creating call", "error", err, "td_call_id", tdCallID)
+		app.logger.ErrorContext(r.Context(), "creating call", "error", err, "td_call_id", tdCallID)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	app.logger.Info("call created", "id", id, "td_call_id", tdCallID)
+	app.logger.InfoContext(r.Context(), "call created", "call_id", id, "td_call_id", tdCallID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
