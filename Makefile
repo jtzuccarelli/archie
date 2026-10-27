@@ -1,9 +1,9 @@
 include .env
 export
 
-GOOSE = go tool goose -dir migrations postgres "$(DATABASE_URL)"
+GOOSE =  go tool goose -dir migrations postgres "$(DATABASE_URL)"
 
-.PHONY: db-up db-down migrate migrate-down migrate-status migrate-create
+.PHONY: db-up db-down migrate migrate-down migrate-status migrate-create run-dev
 
 db-up:
 	docker compose up -d --wait
@@ -22,3 +22,6 @@ migrate-status:
 
 migrate-create:
 	go tool goose -dir migrations -s create $(name) sql
+
+run-dev:
+	go run ./cmd/api & go run ./cmd/worker & wait

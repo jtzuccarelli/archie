@@ -6,16 +6,18 @@ import (
 )
 
 type config struct {
-	dsn          string
-	tdAuthHeader string
-	openaiApiKey string
+	dsn             string
+	tdAuthHeader    string
+	openaiApiKey    string
+	anthropicApiKey string
 }
 
 func loadConfig() (config, error) {
 	cfg := config{
-		dsn:          os.Getenv("DATABASE_URL"),
-		tdAuthHeader: os.Getenv("TD_AUTH_HEADER"),
-		openaiApiKey: os.Getenv("OPENAI_API_KEY"),
+		dsn:             os.Getenv("DATABASE_URL"),
+		tdAuthHeader:    os.Getenv("TD_AUTH_HEADER"),
+		openaiApiKey:    os.Getenv("OPENAI_API_KEY"),
+		anthropicApiKey: os.Getenv("ANTHROPIC_API_KEY"),
 	}
 
 	if cfg.dsn == "" {
@@ -28,6 +30,10 @@ func loadConfig() (config, error) {
 
 	if cfg.openaiApiKey == "" {
 		return config{}, errors.New("OPENAI_API_KEY is required")
+	}
+
+	if cfg.anthropicApiKey == "" {
+		return config{}, errors.New("ANTHROPIC_API_KEY is required")
 	}
 
 	return cfg, nil

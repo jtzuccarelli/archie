@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -25,14 +26,16 @@ var (
 )
 
 type Store struct {
-	pool *pgxpool.Pool
+	pool   *pgxpool.Pool
+	logger *slog.Logger
 }
 
-func NewStore(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool}
+func NewStore(pool *pgxpool.Pool, logger *slog.Logger) *Store {
+	return &Store{pool: pool, logger: logger}
 }
 
 func (s *Store) CreateCall(ctx context.Context, c call.Call) (int64, error) {
+	s.logger.InfoContext(ctx, "creating call in store", "td_call_id", c.TdCallID)
 	const query = `
 		INSERT INTO calls (
 			td_call_id,
@@ -73,6 +76,7 @@ func (s *Store) CreateCall(ctx context.Context, c call.Call) (int64, error) {
 }
 
 func (s *Store) ClaimCalls(ctx context.Context, limit int) ([]call.Call, error) {
+	s.logger.InfoContext(ctx, "claiming calls in store", "limit", limit)
 	const query = `
 		UPDATE calls
 		   SET status = 'processing',
@@ -120,6 +124,7 @@ func (s *Store) ClaimCalls(ctx context.Context, limit int) ([]call.Call, error) 
 }
 
 func (s *Store) CompleteCall(ctx context.Context, id int64, attempts int, o call.Outcome) error {
+	s.logger.InfoContext(ctx, "completing call in store", "call_id", id, "attempts", attempts)
 
 	const query = `
 		UPDATE calls
@@ -127,14 +132,12 @@ func (s *Store) CompleteCall(ctx context.Context, id int64, attempts int, o call
 		       transcript = $1,
 		       flags = $2,
 		       flag_count = jsonb_array_length($2),
-		       is_pushy = $3,
-		       score = $4,
 		       last_error = NULL
-		 WHERE id = $5
-		   AND attempts = $6
+		 WHERE id = $3
+		   AND attempts = $4
 		   AND status = 'processing'`
 
-	tag, err := s.pool.Exec(ctx, query, o.Transcript, o.Flags, o.IsPushy, o.Score, id, attempts)
+	tag, err := s.pool.Exec(ctx, query, o.Transcript, o.Flags, id, attempts)
 
 	if err != nil {
 		return fmt.Errorf("completing call %d: %w", id, err)
@@ -148,6 +151,7 @@ func (s *Store) CompleteCall(ctx context.Context, id int64, attempts int, o call
 }
 
 func (s *Store) FailCall(ctx context.Context, id int64, attempts int, errCause error) error {
+	s.logger.InfoContext(ctx, "failing call in store", "call_id", id, "attempts", attempts)
 
 	const query = `
 		UPDATE calls
@@ -176,6 +180,7 @@ func (s *Store) FailCall(ctx context.Context, id int64, attempts int, errCause e
 }
 
 func (s *Store) RetryCall(ctx context.Context, id int64, attempts int, errCause error) error {
+	s.logger.InfoContext(ctx, "scheduling call retry in store", "call_id", id, "attempts", attempts)
 
 	const query = `
 		UPDATE calls
@@ -211,6 +216,7 @@ func (s *Store) RetryCall(ctx context.Context, id int64, attempts int, errCause 
 }
 
 func (s *Store) RecoverStaleCalls(ctx context.Context) (retried, failed int64, err error) {
+	s.logger.InfoContext(ctx, "recovering stale calls in store")
 
 	const query = `
 		UPDATE calls

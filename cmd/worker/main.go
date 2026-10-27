@@ -58,12 +58,12 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("pinging database: %w", err)
 	}
 
-	st := store.NewStore(pool)
+	st := store.NewStore(pool, logger)
 	c := http.Client{Timeout: 60 * time.Second}
 	td := trackdrive.New(cfg.tdAuthHeader, &c)
 	tr := transcriber.New(cfg.openaiApiKey, &c)
-	an := analyzer.New(cfg.openaiApiKey, &c)
-	proc := processor.New(td, tr, an)
+	an := analyzer.New(cfg.anthropicApiKey, &c)
+	proc := processor.New(td, tr, an, logger)
 
 	w := worker.New(logger, st, proc)
 	logger.Info("starting worker...")

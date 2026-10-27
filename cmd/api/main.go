@@ -52,7 +52,7 @@ func run(logger *slog.Logger) error {
 
 	app := &application{
 		logger: logger,
-		store:  store.NewStore(pool),
+		store:  store.NewStore(pool, logger),
 	}
 
 	srv := &http.Server{

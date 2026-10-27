@@ -32,6 +32,8 @@ type createCallResponse struct {
 }
 
 func (app *application) createCallsHandler(w http.ResponseWriter, r *http.Request) {
+	app.logger.InfoContext(r.Context(), "call ingestion started...")
+
 	var req createCallRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON body", http.StatusBadRequest)

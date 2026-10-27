@@ -18,8 +18,6 @@ type Call struct {
 	Transcript          *string
 	Flags               []string
 	FlagCount           int
-	IsPushy             bool
-	Score               int
 	CreatedAt           time.Time
 	TrackdriveURL       *string
 	AgentName           *string
@@ -37,6 +35,4 @@ type Call struct {
 type Outcome struct {
 	Transcript string
 	Flags      []string
-	IsPushy    bool
-	Score      int
 }
