@@ -132,14 +132,12 @@ func (s *Store) CompleteCall(ctx context.Context, id int64, attempts int, o call
 		       transcript = $1,
 		       flags = $2,
 		       flag_count = jsonb_array_length($2),
-		       is_pushy = $3,
-		       score = $4,
 		       last_error = NULL
-		 WHERE id = $5
-		   AND attempts = $6
+		 WHERE id = $3
+		   AND attempts = $4
 		   AND status = 'processing'`
 
-	tag, err := s.pool.Exec(ctx, query, o.Transcript, o.Flags, o.IsPushy, o.Score, id, attempts)
+	tag, err := s.pool.Exec(ctx, query, o.Transcript, o.Flags, id, attempts)
 
 	if err != nil {
 		return fmt.Errorf("completing call %d: %w", id, err)

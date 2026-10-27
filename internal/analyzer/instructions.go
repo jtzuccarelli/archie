@@ -65,13 +65,5 @@ Violation: Includes — but is not limited to — sarcasm, condescending behavio
 
 ---
 
-SCORING:
-- Start at 100
-- Deduct 10 points per violation flagged
-- Deduct 20 points for HIPAA (HEALTH) violations and for ABSOLUTES that claim we are Medicare or a government agency (these carry the most legal weight)
-- Minimum score is 0
-
-Set "is_pushy" to true if STEAMROLLING, pressure/promise ABSOLUTES, or rude/aggressive patterns are detected.
-
 Each entry in "flags" should name the category and the specific issue (e.g. "RECORDING NOTIFICATION — agent never disclosed the recorded line", "HEALTH (HIPAA) — agent directly asked about customer's diabetes").
 `

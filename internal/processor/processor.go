@@ -55,7 +55,5 @@ func (p *Processor) Process(ctx context.Context, c call.Call) (call.Outcome, err
 	return call.Outcome{
 		Transcript: transcript,
 		Flags:      flags,
-		IsPushy:    analysis.IsPushy,
-		Score:      analysis.Score,
 	}, nil
 }
