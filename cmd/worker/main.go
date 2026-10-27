@@ -62,7 +62,7 @@ func run(logger *slog.Logger) error {
 	c := http.Client{Timeout: 60 * time.Second}
 	td := trackdrive.New(cfg.tdAuthHeader, &c)
 	tr := transcriber.New(cfg.openaiApiKey, &c)
-	an := analyzer.New(cfg.openaiApiKey, &c)
+	an := analyzer.New(cfg.anthropicApiKey, &c)
 	proc := processor.New(td, tr, an, logger)
 
 	w := worker.New(logger, st, proc)
