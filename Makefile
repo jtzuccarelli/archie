@@ -24,4 +24,4 @@ migrate-create:
 	go tool goose -dir migrations -s create $(name) sql
 
 run-dev:
-	go run ./cmd/api && ./cmd/worker	
+	go run ./cmd/api & go run ./cmd/worker & wait
