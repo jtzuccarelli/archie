@@ -260,3 +260,34 @@ func (s *Store) RecoverStaleCalls(ctx context.Context) (retried, failed int64, e
 
 	return retried, failed, nil
 }
+
+func (s *Store) GetCall(ctx context.Context, id int64) (call.CallDetail, error) {
+	s.logger.InfoContext(ctx, "retrieving call", "call_id", id)
+
+	const query = `
+		SELECT id, audio_file_url, transcript, flags, flag_count,
+		       agent_name, trackdrive_url, disposition, offer_name,
+		       agent_talk_time, forward_duration
+		  FROM calls
+		 WHERE id = $1`
+
+	var detail call.CallDetail
+	err := s.pool.QueryRow(ctx, query, id).Scan(
+		&detail.ID,
+		&detail.AudioFileURL,
+		&detail.Transcript,
+		&detail.Flags,
+		&detail.FlagCount,
+		&detail.AgentName,
+		&detail.TrackdriveURL,
+		&detail.Disposition,
+		&detail.OfferName,
+		&detail.AgentTalkTime,
+		&detail.ForwardDuration,
+	)
+	if err != nil {
+		return call.CallDetail{}, fmt.Errorf("retrieving call %d: %w", id, err)
+	}
+
+	return detail, nil
+}

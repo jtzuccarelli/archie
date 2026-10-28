@@ -32,6 +32,20 @@ type Call struct {
 	NextAttemptAt       time.Time
 }
 
+type CallDetail struct {
+	ID              int64
+	AudioFileURL    string
+	Transcript      *string
+	Flags           []string
+	FlagCount       int
+	AgentName       *string
+	TrackdriveURL   *string
+	Disposition     string
+	OfferName       string
+	AgentTalkTime   *int
+	ForwardDuration *int
+}
+
 type Outcome struct {
 	Transcript string
 	Flags      []string
