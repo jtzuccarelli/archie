@@ -53,32 +53,23 @@ type CallFilters struct {
 	Disposition string
 	SortBy      string
 	SortOrder   string
-	DateFrom    string
-	DateTo      string
+	DateFrom    *time.Time
+	DateTo      *time.Time
 	TdCallID    string
 	Limit       int
 	Offset      int
 }
 
 type CallSummary struct {
-	ID              int64
-	TdCallID        string
-	Status          Status
-	CreatedAt       time.Time
-	AgentName       *string
-	OfferName       string
-	Disposition     string
-	FlagCount       int
-	AgentTalkTime   *int
-	ForwardDuration *int
-	TrackdriveURL   *string
-}
-
-type CallsListResponse struct {
-	Calls  []CallSummary `json:"calls"`
-	Total  int           `json:"total"`
-	Limit  int           `json:"limit"`
-	Offset int           `json:"offset"`
+	ID            int64
+	TdCallID      *string
+	Status        Status
+	CreatedAt     time.Time
+	AgentName     *string
+	OfferName     string
+	Disposition   string
+	FlagCount     int
+	TrackdriveURL *string
 }
 
 type Outcome struct {

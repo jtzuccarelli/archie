@@ -293,12 +293,12 @@ func (s *Store) GetCall(ctx context.Context, id int64) (call.CallDetail, error) 
 	return detail, nil
 }
 
-func (s *Store) GetCalls(ctx context.Context, filters call.CallFilters) ([]call.CallSummary, error) {
+func (s *Store) GetCalls(ctx context.Context, filters call.CallFilters) ([]call.CallSummary, int, error) {
 	s.logger.InfoContext(ctx, "retrieving calls")
 
 	query := `
     SELECT id, td_call_id, agent_name, status, disposition, offer_name,
-           flag_count, created_at
+           flag_count, created_at, trackdrive_url
     FROM calls`
 
 	var conditions []string
@@ -316,16 +316,23 @@ func (s *Store) GetCalls(ctx context.Context, filters call.CallFilters) ([]call.
 		addFilter("td_call_id", "=", filters.TdCallID, &conditions, &args)
 	}
 
-	if filters.DateFrom != "" {
-		addFilter("created_at", ">=", filters.DateFrom, &conditions, &args)
+	if filters.DateFrom != nil {
+		addFilter("created_at", ">=", *filters.DateFrom, &conditions, &args)
 	}
 
-	if filters.DateTo != "" {
-		addFilter("created_at", "<", filters.DateTo, &conditions, &args)
+	if filters.DateTo != nil {
+		addFilter("created_at", "<", *filters.DateTo, &conditions, &args)
 	}
 
+	whereClause := ""
 	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += whereClause
+
+	var total int
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM calls"+whereClause, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("counting calls: %w", err)
 	}
 
 	sortColumns := map[string]string{
@@ -358,7 +365,7 @@ func (s *Store) GetCalls(ctx context.Context, filters call.CallFilters) ([]call.
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("querying calls: %w", err)
+		return nil, 0, fmt.Errorf("querying calls: %w", err)
 	}
 	defer rows.Close()
 
@@ -375,17 +382,18 @@ func (s *Store) GetCalls(ctx context.Context, filters call.CallFilters) ([]call.
 			&c.OfferName,
 			&c.FlagCount,
 			&c.CreatedAt,
+			&c.TrackdriveURL,
 		); err != nil {
-			return nil, fmt.Errorf("scanning call: %w", err)
+			return nil, 0, fmt.Errorf("scanning call: %w", err)
 		}
 
 		calls = append(calls, c)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating calls: %w", err)
+		return nil, 0, fmt.Errorf("iterating calls: %w", err)
 	}
 
-	return calls, nil
+	return calls, total, nil
 
 }

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -90,6 +91,25 @@ func (app *application) getCallHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type callSummaryResponse struct {
+	ID            int64       `json:"id"`
+	TdCallID      *string     `json:"td_call_id"`
+	Status        call.Status `json:"status"`
+	CreatedAt     time.Time   `json:"created_at"`
+	AgentName     *string     `json:"agent_name"`
+	OfferName     string      `json:"offer_name"`
+	Disposition   string      `json:"disposition"`
+	FlagCount     int         `json:"flag_count"`
+	TrackdriveURL *string     `json:"trackdrive_url"`
+}
+
+type callsListResponse struct {
+	Calls  []callSummaryResponse `json:"calls"`
+	Total  int                   `json:"total"`
+	Limit  int                   `json:"limit"`
+	Offset int                   `json:"offset"`
+}
+
 func (app *application) getCallsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -129,19 +149,25 @@ func (app *application) getCallsHandler(w http.ResponseWriter, r *http.Request) 
 		tdCallID = id.String()
 	}
 
+	dateFrom, dateTo, err := parseCallDates(q.Get("date_from"), q.Get("date_to"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	filters := call.CallFilters{
 		AgentName:   q.Get("agent_name"),
 		Disposition: q.Get("disposition"),
 		SortBy:      q.Get("sort_by"),
 		SortOrder:   q.Get("sort_order"),
-		DateFrom:    q.Get("date_from"),
-		DateTo:      q.Get("date_to"),
+		DateFrom:    dateFrom,
+		DateTo:      dateTo,
 		TdCallID:    tdCallID,
 		Limit:       limit,
 		Offset:      offset,
 	}
 
-	calls, err := app.store.GetCalls(r.Context(), filters)
+	calls, total, err := app.store.GetCalls(r.Context(), filters)
 
 	if err != nil {
 		app.logger.ErrorContext(r.Context(), "retrieving calls", "error", err)
@@ -149,9 +175,24 @@ func (app *application) getCallsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	callResponse := call.CallsListResponse{
-		Calls:  calls,
-		Total:  len(calls),
+	summaries := make([]callSummaryResponse, 0, len(calls))
+	for _, c := range calls {
+		summaries = append(summaries, callSummaryResponse{
+			ID:            c.ID,
+			TdCallID:      c.TdCallID,
+			Status:        c.Status,
+			CreatedAt:     c.CreatedAt,
+			AgentName:     c.AgentName,
+			OfferName:     c.OfferName,
+			Disposition:   c.Disposition,
+			FlagCount:     c.FlagCount,
+			TrackdriveURL: c.TrackdriveURL,
+		})
+	}
+
+	callResponse := callsListResponse{
+		Calls:  summaries,
+		Total:  total,
 		Limit:  limit,
 		Offset: offset,
 	}
