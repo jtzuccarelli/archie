@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -290,4 +291,101 @@ func (s *Store) GetCall(ctx context.Context, id int64) (call.CallDetail, error) 
 	}
 
 	return detail, nil
+}
+
+func (s *Store) GetCalls(ctx context.Context, filters call.CallFilters) ([]call.CallSummary, error) {
+	s.logger.InfoContext(ctx, "retrieving calls")
+
+	query := `
+    SELECT id, td_call_id, agent_name, status, disposition, offer_name,
+           flag_count, created_at
+    FROM calls`
+
+	var conditions []string
+	var args []any
+
+	if filters.AgentName != "" {
+		addFilter("agent_name", "=", filters.AgentName, &conditions, &args)
+	}
+
+	if filters.Disposition != "" {
+		addFilter("disposition", "=", filters.Disposition, &conditions, &args)
+	}
+
+	if filters.TdCallID != "" {
+		addFilter("td_call_id", "=", filters.TdCallID, &conditions, &args)
+	}
+
+	if filters.DateFrom != "" {
+		addFilter("created_at", ">=", filters.DateFrom, &conditions, &args)
+	}
+
+	if filters.DateTo != "" {
+		addFilter("created_at", "<", filters.DateTo, &conditions, &args)
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	sortColumns := map[string]string{
+		"created_at": "created_at",
+		"agent_name": "agent_name",
+		"flag_count": "flag_count",
+		"id":         "id",
+	}
+
+	sortBy, ok := sortColumns[filters.SortBy]
+	if !ok {
+		sortBy = "created_at"
+	}
+
+	sortOrder := "DESC"
+	if strings.EqualFold(filters.SortOrder, "asc") {
+		sortOrder = "ASC"
+	}
+
+	query += " ORDER BY " + sortBy + " " + sortOrder
+	if sortBy != "id" {
+		query += ", id " + sortOrder
+	}
+
+	args = append(args, filters.Limit)
+	query += fmt.Sprintf(" LIMIT $%d", len(args))
+
+	args = append(args, filters.Offset)
+	query += fmt.Sprintf(" OFFSET $%d", len(args))
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying calls: %w", err)
+	}
+	defer rows.Close()
+
+	calls := make([]call.CallSummary, 0)
+
+	for rows.Next() {
+		var c call.CallSummary
+		if err := rows.Scan(
+			&c.ID,
+			&c.TdCallID,
+			&c.AgentName,
+			&c.Status,
+			&c.Disposition,
+			&c.OfferName,
+			&c.FlagCount,
+			&c.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning call: %w", err)
+		}
+
+		calls = append(calls, c)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating calls: %w", err)
+	}
+
+	return calls, nil
+
 }

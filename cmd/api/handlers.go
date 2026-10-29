@@ -90,6 +90,79 @@ func (app *application) getCallHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (app *application) getCallsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := r.URL.Query()
+
+	limit := 20
+	if raw := q.Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 20 {
+			http.Error(w, "limit must be between 1 and 20", http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+
+	offset := 0
+	if raw := q.Get("offset"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			http.Error(w, "offset must be a nonnegative integer", http.StatusBadRequest)
+			return
+		}
+		offset = parsed
+	}
+
+	tdCallID := q.Get("td_call_id")
+
+	if tdCallID != "" {
+		id, err := uuid.Parse(tdCallID)
+		if err != nil {
+			http.Error(w, "td_call_id must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+		tdCallID = id.String()
+	}
+
+	filters := call.CallFilters{
+		AgentName:   q.Get("agent_name"),
+		Disposition: q.Get("disposition"),
+		SortBy:      q.Get("sort_by"),
+		SortOrder:   q.Get("sort_order"),
+		DateFrom:    q.Get("date_from"),
+		DateTo:      q.Get("date_to"),
+		TdCallID:    tdCallID,
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	calls, err := app.store.GetCalls(r.Context(), filters)
+
+	if err != nil {
+		app.logger.ErrorContext(r.Context(), "retrieving calls", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	callResponse := call.CallsListResponse{
+		Calls:  calls,
+		Total:  len(calls),
+		Limit:  limit,
+		Offset: offset,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(callResponse); err != nil {
+		app.logger.ErrorContext(r.Context(), "writing calls response", "error", err)
+	}
+
+}
+
 func (app *application) createCallsHandler(w http.ResponseWriter, r *http.Request) {
 	app.logger.InfoContext(r.Context(), "call ingestion started...")
 

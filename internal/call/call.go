@@ -1,6 +1,8 @@
 package call
 
-import "time"
+import (
+	"time"
+)
 
 type Status string
 
@@ -44,6 +46,39 @@ type CallDetail struct {
 	OfferName       string
 	AgentTalkTime   *int
 	ForwardDuration *int
+}
+
+type CallFilters struct {
+	AgentName   string
+	Disposition string
+	SortBy      string
+	SortOrder   string
+	DateFrom    string
+	DateTo      string
+	TdCallID    string
+	Limit       int
+	Offset      int
+}
+
+type CallSummary struct {
+	ID              int64
+	TdCallID        string
+	Status          Status
+	CreatedAt       time.Time
+	AgentName       *string
+	OfferName       string
+	Disposition     string
+	FlagCount       int
+	AgentTalkTime   *int
+	ForwardDuration *int
+	TrackdriveURL   *string
+}
+
+type CallsListResponse struct {
+	Calls  []CallSummary `json:"calls"`
+	Total  int           `json:"total"`
+	Limit  int           `json:"limit"`
+	Offset int           `json:"offset"`
 }
 
 type Outcome struct {
