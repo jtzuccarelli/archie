@@ -5,7 +5,7 @@ import "net/http"
 func (app *application) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", app.health)
-	mux.HandleFunc("POST /calls", app.createCallsHandler)
+	mux.Handle("POST /calls", app.requireAPIKey(http.HandlerFunc(app.createCallsHandler)))
 	mux.HandleFunc("GET /calls/{id}", app.getCallHandler)
 	mux.HandleFunc("GET /calls", app.getCallsHandler)
 	return mux
