@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -259,4 +260,140 @@ func (s *Store) RecoverStaleCalls(ctx context.Context) (retried, failed int64, e
 	}
 
 	return retried, failed, nil
+}
+
+func (s *Store) GetCall(ctx context.Context, id int64) (call.CallDetail, error) {
+	s.logger.InfoContext(ctx, "retrieving call", "call_id", id)
+
+	const query = `
+		SELECT id, audio_file_url, transcript, flags, flag_count,
+		       agent_name, trackdrive_url, disposition, offer_name,
+		       agent_talk_time, forward_duration
+		  FROM calls
+		 WHERE id = $1`
+
+	var detail call.CallDetail
+	err := s.pool.QueryRow(ctx, query, id).Scan(
+		&detail.ID,
+		&detail.AudioFileURL,
+		&detail.Transcript,
+		&detail.Flags,
+		&detail.FlagCount,
+		&detail.AgentName,
+		&detail.TrackdriveURL,
+		&detail.Disposition,
+		&detail.OfferName,
+		&detail.AgentTalkTime,
+		&detail.ForwardDuration,
+	)
+	if err != nil {
+		return call.CallDetail{}, fmt.Errorf("retrieving call %d: %w", id, err)
+	}
+
+	return detail, nil
+}
+
+func (s *Store) GetCalls(ctx context.Context, filters call.CallFilters) ([]call.CallSummary, int, error) {
+	s.logger.InfoContext(ctx, "retrieving calls")
+
+	query := `
+    SELECT id, td_call_id, agent_name, status, disposition, offer_name,
+           flag_count, created_at, trackdrive_url
+    FROM calls`
+
+	var conditions []string
+	var args []any
+
+	if filters.AgentName != "" {
+		addFilter("agent_name", "=", filters.AgentName, &conditions, &args)
+	}
+
+	if filters.Disposition != "" {
+		addFilter("disposition", "=", filters.Disposition, &conditions, &args)
+	}
+
+	if filters.TdCallID != "" {
+		addFilter("td_call_id", "=", filters.TdCallID, &conditions, &args)
+	}
+
+	if filters.DateFrom != nil {
+		addFilter("created_at", ">=", *filters.DateFrom, &conditions, &args)
+	}
+
+	if filters.DateTo != nil {
+		addFilter("created_at", "<", *filters.DateTo, &conditions, &args)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += whereClause
+
+	var total int
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM calls"+whereClause, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("counting calls: %w", err)
+	}
+
+	sortColumns := map[string]string{
+		"created_at": "created_at",
+		"agent_name": "agent_name",
+		"flag_count": "flag_count",
+		"id":         "id",
+	}
+
+	sortBy, ok := sortColumns[filters.SortBy]
+	if !ok {
+		sortBy = "created_at"
+	}
+
+	sortOrder := "DESC"
+	if strings.EqualFold(filters.SortOrder, "asc") {
+		sortOrder = "ASC"
+	}
+
+	query += " ORDER BY " + sortBy + " " + sortOrder
+	if sortBy != "id" {
+		query += ", id " + sortOrder
+	}
+
+	args = append(args, filters.Limit)
+	query += fmt.Sprintf(" LIMIT $%d", len(args))
+
+	args = append(args, filters.Offset)
+	query += fmt.Sprintf(" OFFSET $%d", len(args))
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("querying calls: %w", err)
+	}
+	defer rows.Close()
+
+	calls := make([]call.CallSummary, 0)
+
+	for rows.Next() {
+		var c call.CallSummary
+		if err := rows.Scan(
+			&c.ID,
+			&c.TdCallID,
+			&c.AgentName,
+			&c.Status,
+			&c.Disposition,
+			&c.OfferName,
+			&c.FlagCount,
+			&c.CreatedAt,
+			&c.TrackdriveURL,
+		); err != nil {
+			return nil, 0, fmt.Errorf("scanning call: %w", err)
+		}
+
+		calls = append(calls, c)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterating calls: %w", err)
+	}
+
+	return calls, total, nil
+
 }
