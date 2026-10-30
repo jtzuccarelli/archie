@@ -3,7 +3,9 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jtzuccarelli/archie/internal/user"
 )
 
@@ -16,4 +18,21 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*user.User, e
 	}
 
 	return &u, nil
+}
+
+func (s *Store) SaveUserSession(ctx context.Context, id int64, tokenHash string, expiresAt time.Time) error {
+	const query = `
+		UPDATE users
+		   SET session_token_hash = $1,
+		       session_expires_at = $2
+		 WHERE id = $3`
+
+	tag, err := s.pool.Exec(ctx, query, tokenHash, expiresAt, id)
+	if err != nil {
+		return fmt.Errorf("saving session for user %d: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("saving session for user %d: %w", id, pgx.ErrNoRows)
+	}
+	return nil
 }
