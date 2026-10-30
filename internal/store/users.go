@@ -36,3 +36,18 @@ func (s *Store) SaveUserSession(ctx context.Context, id int64, tokenHash string,
 	}
 	return nil
 }
+
+func (s *Store) HasValidSession(ctx context.Context, tokenHash string) (bool, error) {
+	const query = `
+		SELECT EXISTS (
+			SELECT 1 FROM users
+			 WHERE session_token_hash = $1
+			   AND session_expires_at > now()
+		)`
+
+	var valid bool
+	if err := s.pool.QueryRow(ctx, query, tokenHash).Scan(&valid); err != nil {
+		return false, fmt.Errorf("checking user session: %w", err)
+	}
+	return valid, nil
+}

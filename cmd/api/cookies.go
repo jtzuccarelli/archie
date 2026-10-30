@@ -18,5 +18,3 @@ func setSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time) 
 		SameSite: http.SameSiteLaxMode,
 	})
 }
-
-func clearSessionCookie(w http.ResponseWriter) {}
