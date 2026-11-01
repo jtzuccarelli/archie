@@ -16,6 +16,7 @@ import (
 type application struct {
 	logger *slog.Logger
 	store  *store.Store
+	apiKey string
 }
 
 func main() {
@@ -53,6 +54,7 @@ func run(logger *slog.Logger) error {
 	app := &application{
 		logger: logger,
 		store:  store.NewStore(pool, logger),
+		apiKey: cfg.apiKey,
 	}
 
 	srv := &http.Server{
