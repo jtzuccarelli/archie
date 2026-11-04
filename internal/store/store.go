@@ -305,11 +305,11 @@ func (s *Store) GetCalls(ctx context.Context, filters call.CallFilters) ([]call.
 	var args []any
 
 	if filters.AgentName != "" {
-		addFilter("agent_name", "=", filters.AgentName, &conditions, &args)
+		addFilter("agent_name", "ILIKE", "%"+filters.AgentName+"%", &conditions, &args)
 	}
 
 	if filters.Disposition != "" {
-		addFilter("disposition", "=", filters.Disposition, &conditions, &args)
+		addFilter("disposition", "ILIKE", "%"+filters.Disposition+"%", &conditions, &args)
 	}
 
 	if filters.TdCallID != "" {
